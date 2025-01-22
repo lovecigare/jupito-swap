@@ -2,7 +2,7 @@
 
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { buyToken, sellToken } from "./index"; // Adjust the import path if necessary
+import { buyToken, sellToken } from "./tradeFunction"; // Adjust the import path if necessary
 
 yargs(hideBin(process.argv))
   .scriptName("trade")
