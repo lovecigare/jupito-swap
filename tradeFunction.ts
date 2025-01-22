@@ -81,7 +81,7 @@ const swapViaJupiter = async (
       })}`
     );
     console.log(
-      `Time Duration: ${calculateTimeDifference(endTime, startTime + 300)}`
+      `Time Duration: ${calculateTimeDifference(endTime, startTime)}`
     );
   } catch (e) {
     console.error(e);

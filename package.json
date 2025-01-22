@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "main": "trade.ts",
   "bin": {
-    "trade": "./dist/trade.js"
+    "trade": "dist/trade.js"
   },
   "scripts": {
     "build": "tsc",
     "postbuild": "node fix-imports.cjs",
+    "postinstall": "chmod +x dist/trade.js",
     "start": "node dist/trade.js"
   },
   "keywords": [],
