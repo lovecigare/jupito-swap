@@ -88,7 +88,7 @@ const swapViaJupiter = async (
   }
 };
 
-const buyToken = async (tokenAddress: string) => {
+export const buyToken = async (tokenAddress: string) => {
   console.log("=".repeat(40));
   console.log("Buy Transaction:");
   await swapViaJupiter(
@@ -109,7 +109,7 @@ const buyToken = async (tokenAddress: string) => {
   console.log("=".repeat(40));
 };
 
-const sellToken = async (tokenAddress: string) => {
+export const sellToken = async (tokenAddress: string) => {
   const tokenBalance = await fetchTokenBalance(tokenAddress);
   if (tokenBalance === 0) {
     console.log(
@@ -142,31 +142,31 @@ const sellToken = async (tokenAddress: string) => {
   }
 };
 
-const argv = yargs(process.argv.slice(2))
-  .command(
-    "buy <tokenAddress>",
-    "Buy a token",
-    (yargs) => {
-      yargs.positional("tokenAddress", {
-        describe: "The address of the token to buy",
-        type: "string",
-      });
-    },
-    (argv) => {
-      buyToken(argv.tokenAddress as string);
-    }
-  )
-  .command(
-    "sell <tokenAddress>",
-    "Sell a token",
-    (yargs) => {
-      yargs.positional("tokenAddress", {
-        describe: "The address of the token to sell",
-        type: "string",
-      });
-    },
-    (argv) => {
-      sellToken(argv.tokenAddress as string);
-    }
-  )
-  .help().argv;
+// const argv = yargs(process.argv.slice(2))
+//   .command(
+//     "buy <tokenAddress>",
+//     "Buy a token",
+//     (yargs) => {
+//       yargs.positional("tokenAddress", {
+//         describe: "The address of the token to buy",
+//         type: "string",
+//       });
+//     },
+//     (argv) => {
+//       buyToken(argv.tokenAddress as string);
+//     }
+//   )
+//   .command(
+//     "sell <tokenAddress>",
+//     "Sell a token",
+//     (yargs) => {
+//       yargs.positional("tokenAddress", {
+//         describe: "The address of the token to sell",
+//         type: "string",
+//       });
+//     },
+//     (argv) => {
+//       sellToken(argv.tokenAddress as string);
+//     }
+//   )
+//   .help().argv;
