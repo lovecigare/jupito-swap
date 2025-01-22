@@ -13,9 +13,34 @@ import {
   getTokenPrice,
   payer,
 } from "./config";
-import { jitoTip } from "./constants";
 import { sendTxUsingJito } from "./utils";
+import { jitoTip as hardcodedJitoTip } from "./constants"; // For fallback purposes
 import yargs from "yargs";
+
+// Function to dynamically calculate slippage based on the transaction amount
+const calculateDynamicSlippage = (inputAmount: number) => {
+  let slippageBps: number;
+
+  if (inputAmount < 1 * LAMPORTS_PER_SOL) {
+    // Small transaction, low slippage
+    slippageBps = 50; // 0.5%
+  } else if (inputAmount < 10 * LAMPORTS_PER_SOL) {
+    // Medium transaction, medium slippage
+    slippageBps = 100; // 1%
+  } else {
+    // Large transaction, higher slippage
+    slippageBps = 150; // 1.5%
+  }
+
+  return slippageBps;
+};
+
+// Function to calculate dynamic Jito tip based on transaction amount
+const calculateDynamicJitoTip = async (amount: number) => {
+  // Example: Tip is 0.5% of the transaction amount
+  const jitoTipLamports = Math.floor(amount * 0.005 * LAMPORTS_PER_SOL);
+  return jitoTipLamports > 0 ? jitoTipLamports : hardcodedJitoTip;
+};
 
 const jupiterQuoteApi = createJupiterApiClient();
 const getQuote = async (params: QuoteGetRequest) => {
@@ -30,8 +55,7 @@ const getSwap = async (params: SwapInstructionsPostRequest) => {
 const swapViaJupiter = async (
   inputMint: string,
   outputMint: string,
-  inputAmount: number,
-  slippageBps: number = 500
+  inputAmount: number
 ) => {
   const startTime = Date.now();
   console.log(
@@ -46,28 +70,33 @@ const swapViaJupiter = async (
     })}`
   );
   try {
+    // Calculate dynamic slippage and Jito tip
+    const slippageBps = calculateDynamicSlippage(inputAmount);
+    const dynamicJitoTip = await calculateDynamicJitoTip(inputAmount);
+    console.log("slippageBps", slippageBps);
+    console.log("dynamicJitoTip", dynamicJitoTip);
     const quoteResponse = await getQuote({
       inputMint: inputMint,
       outputMint: outputMint,
       amount: inputAmount,
       slippageBps,
     });
-    // console.log(`getting Quote ...`);
+
     const swapResponse = await getSwap({
       swapRequest: {
         quoteResponse: quoteResponse,
         userPublicKey: payer.publicKey.toBase58(),
         wrapAndUnwrapSol: true,
-        prioritizationFeeLamports: { jitoTipLamports: jitoTip },
+        prioritizationFeeLamports: { jitoTipLamports: dynamicJitoTip },
       },
     });
-    // console.log(`excute swaping ...`);
+
     const txBuf = Buffer.from(swapResponse.swapTransaction, "base64");
     let tx = VersionedTransaction.deserialize(txBuf);
     tx.sign([payer]);
 
     const { result, txUrl } = await sendTxUsingJito(tx);
-    // console.log(result, txUrl);
+
     const endTime = Date.now();
     console.log(
       `Time confirmed: ${new Date(endTime).toLocaleDateString("en-US", {
@@ -119,7 +148,6 @@ export const sellToken = async (tokenAddress: string) => {
     console.log("=".repeat(40));
     console.log("Sell Transaction:");
     const decimal = await getTokenDecimals(tokenAddress);
-    // console.log("decimal", decimal);
     await swapViaJupiter(
       tokenAddress,
       NATIVE_MINT.toBase58(),
@@ -142,31 +170,31 @@ export const sellToken = async (tokenAddress: string) => {
   }
 };
 
-// const argv = yargs(process.argv.slice(2))
-//   .command(
-//     "buy <tokenAddress>",
-//     "Buy a token",
-//     (yargs) => {
-//       yargs.positional("tokenAddress", {
-//         describe: "The address of the token to buy",
-//         type: "string",
-//       });
-//     },
-//     (argv) => {
-//       buyToken(argv.tokenAddress as string);
-//     }
-//   )
-//   .command(
-//     "sell <tokenAddress>",
-//     "Sell a token",
-//     (yargs) => {
-//       yargs.positional("tokenAddress", {
-//         describe: "The address of the token to sell",
-//         type: "string",
-//       });
-//     },
-//     (argv) => {
-//       sellToken(argv.tokenAddress as string);
-//     }
-//   )
-//   .help().argv;
+const argv = yargs(process.argv.slice(2))
+  .command(
+    "buy <tokenAddress>",
+    "Buy a token",
+    (yargs) => {
+      yargs.positional("tokenAddress", {
+        describe: "The address of the token to buy",
+        type: "string",
+      });
+    },
+    (argv) => {
+      buyToken(argv.tokenAddress as string);
+    }
+  )
+  .command(
+    "sell <tokenAddress>",
+    "Sell a token",
+    (yargs) => {
+      yargs.positional("tokenAddress", {
+        describe: "The address of the token to sell",
+        type: "string",
+      });
+    },
+    (argv) => {
+      sellToken(argv.tokenAddress as string);
+    }
+  )
+  .help().argv;
