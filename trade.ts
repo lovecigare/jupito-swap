@@ -5,6 +5,7 @@ import { hideBin } from "yargs/helpers";
 import { buyToken, sellToken } from "./index"; // Adjust the import path if necessary
 
 yargs(hideBin(process.argv))
+  .scriptName("trade")
   .command(
     "buy <tokenAddress>",
     "Execute a buy transaction",
