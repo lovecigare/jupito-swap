@@ -5,7 +5,12 @@ import {
   SwapInstructionsPostRequest,
 } from "@jup-ag/api";
 import { NATIVE_MINT } from "@solana/spl-token";
-import { LAMPORTS_PER_SOL, VersionedTransaction } from "@solana/web3.js";
+import {
+  ComputeBudgetProgram,
+  LAMPORTS_PER_SOL,
+  TransactionMessage,
+  VersionedTransaction,
+} from "@solana/web3.js";
 import {
   calculateTimeDifference,
   fetchTokenBalance,
@@ -15,6 +20,7 @@ import {
 } from "./config";
 import { sendTxUsingJito } from "./utils";
 import { jitoTip } from "./constants";
+import yargs from "yargs";
 
 const jupiterQuoteApi = createJupiterApiClient();
 const getQuote = async (params: QuoteGetRequest) => {
@@ -78,10 +84,16 @@ const swapViaJupiter = async (
         userPublicKey: payer.publicKey.toBase58(),
         wrapAndUnwrapSol: true,
         prioritizationFeeLamports: { jitoTipLamports: jitoTip },
+        // computeUnitPriceMicroLamports: {
+        //   units: 200000,
+        // },
       },
     });
     const txBuf = Buffer.from(swapResponse.swapTransaction, "base64");
-    let tx = VersionedTransaction.deserialize(txBuf);
+    const tx = VersionedTransaction.deserialize(txBuf);
+
+    // Step 1: Add Compute Budget Instruction
+
     tx.sign([payer]);
 
     const { result, txUrl } = await sendTxUsingJito(tx);

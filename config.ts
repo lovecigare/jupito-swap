@@ -39,7 +39,8 @@ export const fetchTokenBalance = async (tokenAddress: string) => {
     if (tokenAccountInfo) {
       const tokenAccountAddress = tokenAccountInfo.pubkey;
       const balance = await connection.getTokenAccountBalance(
-        tokenAccountAddress
+        tokenAccountAddress,
+        "processed"
       );
       return balance.value.uiAmount || 0;
     }

@@ -43,7 +43,7 @@ export const sendTxUsingJito = async (tx: VersionedTransaction) => {
                 signature: txid,
                 ...recentBlockhash,
             },
-            "processed"
+            "processed",
         );
         txUrl = `https://solscan.io/tx/${txid}`;
         return { result: true, txUrl };
