@@ -114,7 +114,9 @@ const swapViaJupiter = async (
     );
     return { jitoTip, slippageBps };
   } catch (e) {
-    console.error(e);
+    console.error(
+      "Network is busy so that try again bit later! at least 1 minute"
+    );
     return { jitoTipLamports: 0, slippageBps: 0 };
   }
 };
