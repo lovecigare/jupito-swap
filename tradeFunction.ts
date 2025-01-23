@@ -14,33 +14,7 @@ import {
   payer,
 } from "./config";
 import { sendTxUsingJito } from "./utils";
-import { jitoTip as hardcodedJitoTip } from "./constants"; // For fallback purposes
-import yargs from "yargs";
-
-// Function to dynamically calculate slippage based on the transaction amount
-const calculateDynamicSlippage = (inputAmount: number) => {
-  let slippageBps: number;
-
-  if (inputAmount < 1 * LAMPORTS_PER_SOL) {
-    // Small transaction, low slippage
-    slippageBps = 50; // 0.5%
-  } else if (inputAmount < 10 * LAMPORTS_PER_SOL) {
-    // Medium transaction, medium slippage
-    slippageBps = 100; // 1%
-  } else {
-    // Large transaction, higher slippage
-    slippageBps = 150; // 1.5%
-  }
-
-  return slippageBps;
-};
-
-// Function to calculate dynamic Jito tip based on transaction amount
-const calculateDynamicJitoTip = async (amount: number) => {
-  // Example: Tip is 0.5% of the transaction amount
-  const jitoTipLamports = Math.floor(amount * 0.005 * LAMPORTS_PER_SOL);
-  return jitoTipLamports > 0 ? jitoTipLamports : hardcodedJitoTip;
-};
+import { jitoTip } from "./constants";
 
 const jupiterQuoteApi = createJupiterApiClient();
 const getQuote = async (params: QuoteGetRequest) => {
@@ -52,10 +26,32 @@ const getSwap = async (params: SwapInstructionsPostRequest) => {
   return await jupiterQuoteApi.swapPost(params);
 };
 
+export const calculateJitoTip = (quoteResponse: QuoteResponse): number => {
+  const baseTip = 1000;
+  const dynamicFactor =
+    Number(quoteResponse.outAmount) / Number(quoteResponse.inAmount);
+  console.log("dynamicFactor", dynamicFactor);
+  return dynamicFactor > 100000
+    ? 100000
+    : dynamicFactor > 1
+    ? Math.round(baseTip * dynamicFactor)
+    : Math.round(baseTip / dynamicFactor);
+};
+
+export const calculateDynamicSlippage = (
+  quoteResponse: QuoteResponse
+): number => {
+  console.log("quoteResponse", quoteResponse);
+  const slippageFactor = 0.01;
+  const slippage = Math.round(Number(quoteResponse.inAmount) * slippageFactor);
+  return slippage > 5000 ? 5000 : slippage;
+};
+
 const swapViaJupiter = async (
   inputMint: string,
   outputMint: string,
-  inputAmount: number
+  inputAmount: number,
+  slippageBps = 5000
 ) => {
   const startTime = Date.now();
   console.log(
@@ -70,33 +66,25 @@ const swapViaJupiter = async (
     })}`
   );
   try {
-    // Calculate dynamic slippage and Jito tip
-    const slippageBps = calculateDynamicSlippage(inputAmount);
-    const dynamicJitoTip = await calculateDynamicJitoTip(inputAmount);
-    console.log("slippageBps", slippageBps);
-    console.log("dynamicJitoTip", dynamicJitoTip);
     const quoteResponse = await getQuote({
       inputMint: inputMint,
       outputMint: outputMint,
       amount: inputAmount,
       slippageBps,
     });
-
     const swapResponse = await getSwap({
       swapRequest: {
         quoteResponse: quoteResponse,
         userPublicKey: payer.publicKey.toBase58(),
         wrapAndUnwrapSol: true,
-        prioritizationFeeLamports: { jitoTipLamports: dynamicJitoTip },
+        prioritizationFeeLamports: { jitoTipLamports: jitoTip },
       },
     });
-
     const txBuf = Buffer.from(swapResponse.swapTransaction, "base64");
     let tx = VersionedTransaction.deserialize(txBuf);
     tx.sign([payer]);
 
     const { result, txUrl } = await sendTxUsingJito(tx);
-
     const endTime = Date.now();
     console.log(
       `Time confirmed: ${new Date(endTime).toLocaleDateString("en-US", {
@@ -112,15 +100,17 @@ const swapViaJupiter = async (
     console.log(
       `Time Duration: ${calculateTimeDifference(endTime, startTime)}`
     );
+    return { jitoTip, slippageBps };
   } catch (e) {
     console.error(e);
+    return { jitoTipLamports: 0, slippageBps: 0 };
   }
 };
 
 export const buyToken = async (tokenAddress: string) => {
   console.log("=".repeat(40));
   console.log("Buy Transaction:");
-  await swapViaJupiter(
+  const { jitoTipLamports, slippageBps } = await swapViaJupiter(
     NATIVE_MINT.toBase58(),
     tokenAddress,
     0.01 * LAMPORTS_PER_SOL
@@ -128,9 +118,17 @@ export const buyToken = async (tokenAddress: string) => {
   const solanaPrice = await getTokenPrice(
     "So11111111111111111111111111111111111111112"
   );
-  console.log(`Jito fees: 0.0001 SOL($${(solanaPrice * 0.0001).toFixed(4)})`);
   console.log(
-    `Swap fees: 0.000005 SOL($${(solanaPrice * 0.000005).toFixed(4)})`
+    `Jito fees: ${jitoTip / LAMPORTS_PER_SOL} SOL($${(
+      (solanaPrice * jitoTip) /
+      LAMPORTS_PER_SOL
+    ).toFixed(4)})`
+  );
+  console.log(
+    `Swap fees: ${slippageBps / LAMPORTS_PER_SOL} SOL($${(
+      (solanaPrice * slippageBps) /
+      LAMPORTS_PER_SOL
+    ).toFixed(4)})`
   );
   console.log(
     `Total Investment including fees: $${(solanaPrice * 0.010105).toFixed(4)}`
@@ -148,7 +146,8 @@ export const sellToken = async (tokenAddress: string) => {
     console.log("=".repeat(40));
     console.log("Sell Transaction:");
     const decimal = await getTokenDecimals(tokenAddress);
-    await swapViaJupiter(
+    // console.log("decimal", decimal);
+    const { jitoTipLamports, slippageBps } = await swapViaJupiter(
       tokenAddress,
       NATIVE_MINT.toBase58(),
       tokenBalance * 10 ** decimal
@@ -158,9 +157,17 @@ export const sellToken = async (tokenAddress: string) => {
       "So11111111111111111111111111111111111111112"
     );
     const tokenPrice = await getTokenPrice(tokenAddress);
-    console.log(`Jito fees: 0.0001 SOL($${(solanaPrice * 0.0001).toFixed(4)})`);
     console.log(
-      `Swap fees: 0.000005 SOL($${(solanaPrice * 0.000005).toFixed(4)})`
+      `Jito fees: ${jitoTip / LAMPORTS_PER_SOL} SOL($${(
+        (solanaPrice * jitoTip) /
+        LAMPORTS_PER_SOL
+      ).toFixed(4)})`
+    );
+    console.log(
+      `Swap fees: ${slippageBps / LAMPORTS_PER_SOL} SOL($${(
+        (solanaPrice * slippageBps) /
+        LAMPORTS_PER_SOL
+      ).toFixed(4)})`
     );
     console.log(
       "Total Investment including fees",
@@ -169,32 +176,3 @@ export const sellToken = async (tokenAddress: string) => {
     console.log("=".repeat(40));
   }
 };
-
-const argv = yargs(process.argv.slice(2))
-  .command(
-    "buy <tokenAddress>",
-    "Buy a token",
-    (yargs) => {
-      yargs.positional("tokenAddress", {
-        describe: "The address of the token to buy",
-        type: "string",
-      });
-    },
-    (argv) => {
-      buyToken(argv.tokenAddress as string);
-    }
-  )
-  .command(
-    "sell <tokenAddress>",
-    "Sell a token",
-    (yargs) => {
-      yargs.positional("tokenAddress", {
-        describe: "The address of the token to sell",
-        type: "string",
-      });
-    },
-    (argv) => {
-      sellToken(argv.tokenAddress as string);
-    }
-  )
-  .help().argv;
